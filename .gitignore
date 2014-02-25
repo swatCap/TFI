@@ -4,3 +4,6 @@
 *.jar
 *.war
 *.ear
+/TFI/nbproject/private/
+/TFI/build/
+/TFI_M/target/
