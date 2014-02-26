@@ -5,6 +5,7 @@
 
 package swat.tfi;
 
+
 /**
  * <b>Предназначение:</b><br/>
  *   <p></p>
@@ -19,5 +20,7 @@ package swat.tfi;
 
 public interface FollowersInformator
 {
-    public IDs getMyFollowers();
+    public long[] getMyFollowersIDs();
+    
+    public long[] getMyFriends();
 }
