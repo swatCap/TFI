@@ -36,7 +36,7 @@ import twitter4j.conf.ConfigurationBuilder;
 
 public class IncreaserImpl implements Increaser
 {
-    private final Twitter twitter;
+    private final Twitter informator;
     private final Storage storage = new StorageH2Impl();
     
     public IncreaserImpl()
@@ -49,7 +49,7 @@ public class IncreaserImpl implements Increaser
           .setOAuthAccessTokenSecret("wmEgPeQwhE1No4k1oBuKThSQu4jYrih0s3KbGodNjwQ5B");
         
         TwitterFactory tf = new TwitterFactory(cb.build());
-        twitter = tf.getInstance();  
+        informator = tf.getInstance();  
     }
 
     @Override
@@ -57,7 +57,7 @@ public class IncreaserImpl implements Increaser
     {
         try
         {
-            return ConvertionUtils.idsToList(twitter.getFollowersIDs(-1));
+            return ConvertionUtils.idsToList(informator.getFollowersIDs(-1));
         }
         catch (TwitterException twitterException)
         {
@@ -71,7 +71,7 @@ public class IncreaserImpl implements Increaser
     {
         try
         {
-            return ConvertionUtils.idsToList(twitter.getFriendsIDs(-1));
+            return ConvertionUtils.idsToList(informator.getFriendsIDs(-1));
         }
         catch (TwitterException twitterException)
         {
@@ -100,7 +100,7 @@ public class IncreaserImpl implements Increaser
     {
         try
         {            
-            User u = twitter.showUser(id);
+            User u = informator.showUser(id);
             
             Twitterian twitterian = new Twitterian();
             twitterian.setId(u.getId());
@@ -122,7 +122,7 @@ public class IncreaserImpl implements Increaser
     {
         try
         {            
-            User u = twitter.showUser(screenName);
+            User u = informator.showUser(screenName);
             
             Twitterian twitterian = new Twitterian();
             twitterian.setId(u.getId());
@@ -154,7 +154,7 @@ public class IncreaserImpl implements Increaser
             {
                 try
                 {
-                    User user = twitter.showUser(screenName);
+                    User user = informator.showUser(screenName);
                     if (user != null)
                     {
                         twitterian.setId(user.getId());
@@ -215,9 +215,28 @@ public class IncreaserImpl implements Increaser
     }
        
     @Override
-    public void follow(int count, boolean followersLessThanFriends, boolean russianLanguage, boolean noCollectiveFollowingTweets)
-    {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    public void follow(int count, boolean friendsMoreThanFollowers, boolean russianLanguage, boolean noCollectiveFollowingTweets) throws TFIException
+    {        
+        int currentFollowed = 0;
+
+        while (currentFollowed < count)
+        {
+            Long candidateId = findCandidateToFollow(friendsMoreThanFollowers, russianLanguage, noCollectiveFollowingTweets);
+
+            if (candidateId != null)
+            {
+                try
+                {
+                    informator.createFriendship(candidateId);
+                    currentFollowed++;
+                }
+                catch (TwitterException exception)
+                {
+                    //TODO :: add logging
+                    exception.printStackTrace();                                                
+                }
+            }
+        }        
     }
 
     @Override
@@ -273,7 +292,7 @@ public class IncreaserImpl implements Increaser
             {
                 try
                 {
-                    twitter.destroyFriendship(id);
+                    informator.destroyFriendship(id);
                 }
                 catch (TwitterException exception)
                 {
@@ -293,5 +312,49 @@ public class IncreaserImpl implements Increaser
         }
         
         return null;
+    }
+
+    private Long findCandidateToFollow(boolean friendsMoreThanFollowers, boolean russianLanguage, boolean noCollectiveFollowingTweets) throws TFIException
+    {
+        List<Long> friends = getMyFriendsIDs();
+        
+        if (friends != null && !friends.isEmpty())
+        {
+            int indexOfFriend = (int) (Math.random() * friends.size());
+            
+            Long friendToInspect = friends.get(indexOfFriend);
+            
+            try
+            {
+                IDs friendFriendsIds = informator.getFriendsIDs(friendToInspect, -1);
+                
+                long[] friendFriends = friendFriendsIds != null ? friendFriendsIds.getIDs() : null;
+                if (friendFriends != null && friendFriends.length != 0)
+                {
+                    for (long candidateId : friendFriends)
+                    {
+                        User candidate = informator.showUser(candidateId);
+                        if (candidate != null)
+                        {
+                            
+                        }                        
+                    }
+                }                
+            }
+            catch (TwitterException exception)
+            {
+                //TODO :: add logging
+                exception.printStackTrace();
+                
+                //repeat attempt
+                return findCandidateToFollow(friendsMoreThanFollowers, russianLanguage, noCollectiveFollowingTweets);
+            }            
+        }
+        else
+        {
+            throw new TFIException("You dont have friends! Follow at least one!");        
+        }   
+        
+        return findCandidateToFollow(friendsMoreThanFollowers, russianLanguage, noCollectiveFollowingTweets);
     }
 }

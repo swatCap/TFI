@@ -39,7 +39,7 @@ public interface Increaser extends FollowersInformator, Storage
      */
     public List<Twitterian> addToFavouriteFriends(List<Twitterian> twitterian);
     
-    public void follow(int count, boolean followersLessThanFriends, boolean russianLanguage, boolean noCollectiveFollowingTweets);
+    public void follow(int count, boolean friendsMoreThanFollowers, boolean russianLanguage, boolean noCollectiveFollowingTweets) throws TFIException;
     
     
 }
