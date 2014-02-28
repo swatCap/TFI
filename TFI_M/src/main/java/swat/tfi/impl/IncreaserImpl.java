@@ -6,11 +6,15 @@
 package swat.tfi.impl;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import swat.tfi.Increaser;
 import swat.tfi.Storage;
 import swat.tfi.data.Twitterian;
 import swat.tfi.exceptions.TFIException;
+import swat.tfi.utils.ConvertionUtils;
 import twitter4j.IDs;
 import twitter4j.Twitter;
 import twitter4j.TwitterException;
@@ -49,11 +53,11 @@ public class IncreaserImpl implements Increaser
     }
 
     @Override
-    public long[] getMyFollowersIDs()
+    public List<Long> getMyFollowersIDs()
     {
         try
         {
-            return idsToLongArray(twitter.getFollowersIDs(-1));
+            return ConvertionUtils.idsToList(twitter.getFollowersIDs(-1));
         }
         catch (TwitterException twitterException)
         {
@@ -63,11 +67,11 @@ public class IncreaserImpl implements Increaser
     }
 
     @Override
-    public long[] getMyFriendsIDs()
+    public List<Long> getMyFriendsIDs()
     {
         try
         {
-            return idsToLongArray(twitter.getFriendsIDs(-1));
+            return ConvertionUtils.idsToList(twitter.getFriendsIDs(-1));
         }
         catch (TwitterException twitterException)
         {
@@ -79,7 +83,10 @@ public class IncreaserImpl implements Increaser
     @Override
     public void unfollowAllWhoDoesntFollowMeExceptFavourites()
     {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        List<Long> usersToUnfollow = findIdsOfAllWhoDoesntFollowMeExceptFavourites();
+        List<Long> unsucceeded = unfollow(usersToUnfollow);
+                
+        //TODO :: add unsucceeded logging
     }
 
     @Override
@@ -218,42 +225,73 @@ public class IncreaserImpl implements Increaser
     {
         storage.destroy();
     }
+                            
     
-                    
-    private long[] listToLongArray(List<Long> list)
+    private List<Long> findIdsOfAllWhoDoesntFollowMeExceptFavourites()
     {
-        if (list != null)
+        List<Long> friendsIds     = getMyFriendsIDs();        
+        List<Long> followersIds   = getMyFollowersIDs();
+        List<Long> favouritesIds  = new ArrayList<Long>();
+       
+        List<Twitterian> favourites = getFavouriteFriends();
+        if (favourites != null && !favourites.isEmpty())
         {
-            long[] res = new long[list.size()];
-            for(int i = 0; i < list.size(); i++) 
+            for (Twitterian twitterian : favourites)
             {
-                res[i] = list.get(i);
+                favouritesIds.add(twitterian.getId());
+            }
+        }
+        
+        if (friendsIds != null && !friendsIds.isEmpty())
+        {
+            if (followersIds != null && !followersIds.isEmpty())
+            {
+                friendsIds.removeAll(followersIds);
             }
 
+            if (!favouritesIds.isEmpty())
+            {
+                friendsIds.removeAll(favouritesIds);
+            }
+        }
+        
+        return friendsIds;
+    }
+    
+    /**
+     * Unfollow users with ids
+     * @param idsToUnfollow
+     * @return ids which were not unfollowed
+     */
+    private List<Long> unfollow(List<Long> idsToUnfollow)
+    {
+        if (idsToUnfollow != null && !idsToUnfollow.isEmpty())
+        {
+            List<Long> res = null;
+            
+            for (Long id : idsToUnfollow)
+            {
+                try
+                {
+                    twitter.destroyFriendship(id);
+                }
+                catch (TwitterException exception)
+                {
+                    //TODO :: add logging
+                    exception.printStackTrace();
+                    
+                    if (res == null)
+                    {
+                        res = new ArrayList<Long>();
+                    }
+                    
+                    res.add(id);
+                }
+            }
+            
             return res;
         }
         
         return null;
     }
-    
-    private long[] idsToLongArray(IDs ids)
-    {
-        if (ids != null)
-        {
-            List<Long> resList = new ArrayList<Long>();       
-            do
-            {
-                for (long id : ids.getIDs())
-                {
-                    resList.add(id);
-                }
-            }
-            while (ids.hasNext());            
-
-            return listToLongArray(resList);
-        }
-        
-        return null;
-    }
-
 }

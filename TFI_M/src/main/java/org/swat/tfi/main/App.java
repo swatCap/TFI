@@ -18,15 +18,17 @@ public class App
     {
         Increaser increaser = new IncreaserImpl();
         
-        List<Twitterian> favourites = increaser.getFavouriteFriends();
+        increaser.unfollowAllWhoDoesntFollowMeExceptFavourites();
         
-        if (favourites != null && !favourites.isEmpty())
-        {
-            for (Twitterian twitterian : favourites)
-            {
-                System.out.println(twitterian.getScreenName() + " ");
-            }
-        }
+//        List<Twitterian> favourites = increaser.getFavouriteFriends();
+//        
+//        if (favourites != null && !favourites.isEmpty())
+//        {
+//            for (Twitterian twitterian : favourites)
+//            {
+//                System.out.println(twitterian.getScreenName() + " ");
+//            }
+//        }
         
 //        File f = new File("twitterians.json");
                 

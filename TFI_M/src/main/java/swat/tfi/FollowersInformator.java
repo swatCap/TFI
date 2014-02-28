@@ -5,6 +5,7 @@
 
 package swat.tfi;
 
+import java.util.List;
 import swat.tfi.data.Twitterian;
 
 
@@ -22,9 +23,9 @@ import swat.tfi.data.Twitterian;
 
 public interface FollowersInformator
 {
-    public long[] getMyFollowersIDs();
+    public List<Long> getMyFollowersIDs();
     
-    public long[] getMyFriendsIDs();
+    public List<Long> getMyFriendsIDs();
     
     public Twitterian getTwitterian(long id);
     public Twitterian getTwitterian(String screenName);
