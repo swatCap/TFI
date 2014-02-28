@@ -7,6 +7,9 @@ package swat.tfi;
 
 import java.util.List;
 
+import swat.tfi.data.Twitterian;
+import swat.tfi.exceptions.TFIException;
+
 /**
  * <b>Предназначение:</b><br/>
  *   <p></p>
@@ -19,15 +22,24 @@ import java.util.List;
  * @author Sviatoslav Lobach (s.lobach@parkcode.com.ua)
  */
 
-public interface Increaser extends FollowersInformator
+public interface Increaser extends FollowersInformator, Storage
 {        
+//    /**
+//     * Get friends which aren't following me
+//     * @return names of friends which aren't following me
+//     */
+//    public List<Twitterian> getFriendsNonFollowers();
+    
+    public void unfollowAllWhoDoesntFollowMeExceptFavourites();        
+    
     /**
-     * Get names of friends which aren't following me
-     * @return names of friends which aren't following me
+     * 
+     * @param twitterian
+     * @return list of twitterians whish were not added      
      */
-    public List<String> getNamesOfFriendsNonFollowers();
+    public List<Twitterian> addToFavouriteFriends(List<Twitterian> twitterian);
     
-    public void unfollowAllWhoDoesntFollowMe();
+    public void follow(int count, boolean followersLessThanFriends, boolean russianLanguage, boolean noCollectiveFollowingTweets);
     
-//    public List<Long> findPoss
+    
 }

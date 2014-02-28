@@ -5,6 +5,8 @@
 
 package swat.tfi;
 
+import swat.tfi.data.Twitterian;
+
 
 /**
  * <b>Предназначение:</b><br/>
@@ -22,5 +24,9 @@ public interface FollowersInformator
 {
     public long[] getMyFollowersIDs();
     
-    public long[] getMyFriends();
+    public long[] getMyFriendsIDs();
+    
+    public Twitterian getTwitterian(long id);
+    public Twitterian getTwitterian(String screenName);
+        
 }
