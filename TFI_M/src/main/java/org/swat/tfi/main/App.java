@@ -20,7 +20,7 @@ public class App
         Increaser increaser = new IncreaserImpl();
         try
         {
-            increaser.follow(15, true, true, false);
+            increaser.follow(50, true, false, false);
         }
         catch (TFIException exception)
         {

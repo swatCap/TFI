@@ -29,5 +29,7 @@ public interface FollowersInformator
     
     public Twitterian getTwitterian(long id);
     public Twitterian getTwitterian(String screenName);
+    
+    public List<Long> getFriendsIds(Long friendToInspect);
         
 }

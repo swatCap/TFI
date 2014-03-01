@@ -23,6 +23,10 @@ public class Twitterian
     private String      name;
     private String      screenName;
     
+    private String      language;
+    private int         followersCount;
+    private int         friendsCount;
+    
     public Twitterian()
     {
     }
@@ -56,6 +60,38 @@ public class Twitterian
     {
         this.screenName = screenName;
     }
+
+    public String getLanguage()
+    {
+        return language;
+    }
+
+    public void setLanguage(String language)
+    {
+        this.language = language;
+    }
+
+    public int getFollowersCount()
+    {
+        return followersCount;
+    }
+
+    public void setFollowersCount(int followersCount)
+    {
+        this.followersCount = followersCount;
+    }
+
+    public int getFriendsCount()
+    {
+        return friendsCount;
+    }
+
+    public void setFriendsCount(int friendsCount)
+    {
+        this.friendsCount = friendsCount;
+    }
+    
+    
     
     public boolean isValid()
     {

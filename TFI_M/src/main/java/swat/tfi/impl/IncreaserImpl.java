@@ -7,13 +7,19 @@ package swat.tfi.impl;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import swat.tfi.Increaser;
 import swat.tfi.Storage;
 import swat.tfi.data.Twitterian;
 import swat.tfi.exceptions.TFIException;
 import swat.tfi.utils.ConvertionUtils;
 import twitter4j.IDs;
+import twitter4j.RateLimitStatusEvent;
+import twitter4j.RateLimitStatusListener;
+import twitter4j.ResponseList;
+import twitter4j.Status;
 import twitter4j.Twitter;
 import twitter4j.TwitterException;
 import twitter4j.TwitterFactory;
@@ -35,11 +41,15 @@ import twitter4j.conf.ConfigurationBuilder;
 public class IncreaserImpl implements Increaser
 {
     private static final String MY_SCREEN_NAME = "mesviatsviat";
+    private static final int    MAX_CALLS_PER_FOUR_MINUTES = 10;
+    
     private final Long myId;
     
     private final Twitter informator;
     private final Storage storage = new StorageH2Impl();
     
+    private final Set<Long> myFriends;
+            
     public IncreaserImpl()
     {        
         ConfigurationBuilder cb = new ConfigurationBuilder();
@@ -51,15 +61,60 @@ public class IncreaserImpl implements Increaser
         
         TwitterFactory tf = new TwitterFactory(cb.build());
         informator = tf.getInstance();  
-        
+        informator.addRateLimitStatusListener(new RateLimitStatusListener()
+        {
+            private void checkRateLimit(RateLimitStatusEvent event)
+            {
+                int remainCalls = event.getRateLimitStatus().getRemaining();
+                int secondsUntilReset = event.getRateLimitStatus().getSecondsUntilReset();
+                if (secondsUntilReset < 0)
+                {
+                    secondsUntilReset = 0;
+                }
+                secondsUntilReset += 240; //additional 3 mins
+                
+//                System.out.println("Calls remain : " + remainCalls + " Seconds until reset " + secondsUntilReset);
+                if (remainCalls <= 1)
+                {                    
+                    Date nextRefreshDate = new Date();
+                    long waitTimeInMillis = secondsUntilReset * 1000l;
+                    nextRefreshDate.setTime(nextRefreshDate.getTime() + waitTimeInMillis);
+                    System.out.println("Have to wait until rate refreshes to time " + nextRefreshDate.toString());
+
+                    try
+                    {
+                        Thread.sleep(waitTimeInMillis);
+                    }
+                    catch (InterruptedException exception)
+                    {
+                        exception.printStackTrace();
+                    }
+                    
+                }
+            }
+            
+            public void onRateLimitStatus(RateLimitStatusEvent event)
+            {
+                checkRateLimit(event);
+            }
+
+            public void onRateLimitReached(RateLimitStatusEvent event)
+            {
+                System.out.println("Rate limit reached!");
+                
+                checkRateLimit(event);                                
+            }
+        });
         Twitterian me = getTwitterian(MY_SCREEN_NAME);        
         
-        myId = me != null ? me.getId() : null;
+        myId = me != null ? me.getId() : null;                
+        
+        myFriends = new HashSet<Long>(getMyFriendsIDs());        
     }
 
     @Override
     public List<Long> getMyFollowersIDs()
-    {
+    {        
         try
         {
             return ConvertionUtils.idsToList(informator.getFollowersIDs(-1));
@@ -77,7 +132,7 @@ public class IncreaserImpl implements Increaser
 
     @Override
     public List<Long> getMyFriendsIDs()
-    {
+    {        
         try
         {
             return ConvertionUtils.idsToList(informator.getFriendsIDs(-1));
@@ -110,7 +165,7 @@ public class IncreaserImpl implements Increaser
 
     @Override
     public Twitterian getTwitterian(long id)
-    {
+    {        
         try
         {            
             User u = informator.showUser(id);
@@ -119,6 +174,9 @@ public class IncreaserImpl implements Increaser
             twitterian.setId(u.getId());
             twitterian.setName(u.getName());
             twitterian.setScreenName(u.getScreenName());
+            twitterian.setLanguage(u.getLang());
+            twitterian.setFollowersCount(u.getFollowersCount());
+            twitterian.setFriendsCount(u.getFriendsCount());
             
             return twitterian;
         }
@@ -129,15 +187,16 @@ public class IncreaserImpl implements Increaser
             {
                 return getTwitterian(id);
             }
+            
             return null;
         }
     }
 
     @Override
     public Twitterian getTwitterian(String screenName)
-    {
+    {        
         try
-        {            
+        {                           
             User u = informator.showUser(screenName);
             
             Twitterian twitterian = new Twitterian();
@@ -146,6 +205,7 @@ public class IncreaserImpl implements Increaser
             twitterian.setScreenName(u.getScreenName());
             
             return twitterian;
+            
         }
         catch (TwitterException te)
         {
@@ -156,7 +216,31 @@ public class IncreaserImpl implements Increaser
             }
             return null;
         }
-    }        
+    }     
+    
+    @Override
+    public List<Long> getFriendsIds(Long friendToInspect)
+    {
+        if (friendToInspect != null)
+        {
+            try
+            {
+                IDs ids = informator.getFriendsIDs(friendToInspect, -1);
+                
+                return ConvertionUtils.idsToList(ids);
+            }
+            catch (TwitterException te)
+            {
+                boolean haveToWait = checkTwitterException(te);
+                if (haveToWait)
+                {
+                    return getFriendsIds(friendToInspect);
+                }  
+            }
+        }
+        
+        return null;
+    }
 
     @Override
     public void addToFavouriteFriends(Twitterian twitterian) throws TFIException
@@ -228,11 +312,11 @@ public class IncreaserImpl implements Increaser
     public void follow(int count, boolean friendsMoreThanFollowers, boolean russianLanguage, boolean noCollectiveFollowingTweets) throws TFIException
     {        
         int currentFollowed = 0;
-        List<Long> myFriends = getMyFriendsIDs();
+        List<Twitterian> myFavouriteFriends = getFavouriteFriends();
         
         while (currentFollowed < count)
         {
-            Long candidateId = findCandidateToFollow(myFriends, myId, friendsMoreThanFollowers, russianLanguage, noCollectiveFollowingTweets);
+            Long candidateId = findCandidateToFollow(myFavouriteFriends, myId, friendsMoreThanFollowers, russianLanguage, noCollectiveFollowingTweets);
 
             if (candidateId != null)
             {
@@ -241,6 +325,8 @@ public class IncreaserImpl implements Increaser
                     follow(candidateId);
                     currentFollowed++;
                     System.out.println("Followed number " + currentFollowed + " id: " + candidateId);
+                    addRandomTweetToFavourites(candidateId);
+                    
                 }
                 catch (TFIException exception)
                 {
@@ -301,22 +387,16 @@ public class IncreaserImpl implements Increaser
             
             for (Long id : idsToUnfollow)
             {
-                try
+                boolean unfollowed = unfollow(id);
+                if (!unfollowed)
                 {
-                    informator.destroyFriendship(id);
-                }
-                catch (TwitterException exception)
-                {
-                    //TODO :: add logging
-                    exception.printStackTrace();
-                    
                     if (res == null)
                     {
                         res = new ArrayList<Long>();
                     }
                     
                     res.add(id);
-                }
+                }                
             }
             
             return res;
@@ -325,44 +405,45 @@ public class IncreaserImpl implements Increaser
         return null;
     }
 
-    private Long findCandidateToFollow(List<Long> myFriends, Long myId, boolean friendsMoreThanFollowers, boolean russianLanguage, boolean noCollectiveFollowingTweets) throws TFIException
+    private Long findCandidateToFollow(List<Twitterian> myFavouriteFriends, Long myId, boolean friendsMoreThanFollowers, boolean russianLanguage, boolean noCollectiveFollowingTweets) throws TFIException
     {        
-        if (myFriends != null && !myFriends.isEmpty())
+        if (myFavouriteFriends != null && !myFavouriteFriends.isEmpty())
         {
-            int indexOfFriend = (int) (Math.random() * myFriends.size());
+            int indexOfFriend = (int) (Math.random() * myFavouriteFriends.size());
             
-            Long friendToInspect = myFriends.get(indexOfFriend);
-            
-            try
+            Long friendToInspect = myFavouriteFriends.get(indexOfFriend).getId();
+                                       
+            List<Long> friendFriends = getFriendsIdsFirstPage(friendToInspect);
+            if (friendFriends != null && !friendFriends.isEmpty())
             {
-                IDs friendFriendsIds = informator.getFriendsIDs(friendToInspect, -1);
-                
-                long[] friendFriends = friendFriendsIds != null ? friendFriendsIds.getIDs() : null;
-                if (friendFriends != null && friendFriends.length != 0)
+                for (Long candidateId : friendFriends)
                 {
-                    for (long candidateId : friendFriends)
+                    if (!myFriends.contains(candidateId))
                     {
-                        User candidate = informator.showUser(candidateId);
-                        if (candidate != null && (myId == null || candidateId != myId.longValue()))
-                        {                                                        
-                            if (friendsMoreThanFollowers && !candidateIsOkForFriendsMoreThanFollowers(candidate))
-                            {
-                                continue;
-                            }
-                            if (russianLanguage && !candidateIsOkForRussianLanguage(candidate))
-                            {
-                                continue;
-                            }
-                            //TODO :: collective followers check
+                        if (friendsMoreThanFollowers || russianLanguage || noCollectiveFollowingTweets)
+                        {
+                            Twitterian candidate = getTwitterian(candidateId);
+                            if (candidate != null && (myId == null || candidateId != myId.longValue()))
+                            {                                                        
+                                if (friendsMoreThanFollowers && !candidateIsOkForFriendsMoreThanFollowers(candidate))
+                                {
+                                    continue;
+                                }
+                                if (russianLanguage && !candidateIsOkForRussianLanguage(candidate))
+                                {
+                                    continue;
+                                }
+                                //TODO :: collective followers check
+                                return candidateId;
+                            }  
+                        }
+                        else
+                        {
                             return candidateId;
-                        }                        
+                        }
                     }
-                }                
-            }
-            catch (TwitterException exception)
-            {
-                checkTwitterException(exception);
-            }            
+                }
+            }                                      
         }
         else
         {
@@ -370,10 +451,10 @@ public class IncreaserImpl implements Increaser
         }   
         
         //repeat attempt
-        return findCandidateToFollow(myFriends, myId, friendsMoreThanFollowers, russianLanguage, noCollectiveFollowingTweets);
+        return findCandidateToFollow(myFavouriteFriends, myId, friendsMoreThanFollowers, russianLanguage, noCollectiveFollowingTweets);
     }
     
-    private boolean candidateIsOkForFriendsMoreThanFollowers(User candidate)
+    private boolean candidateIsOkForFriendsMoreThanFollowers(Twitterian candidate)
     {
         if (candidate != null)
         {
@@ -386,11 +467,11 @@ public class IncreaserImpl implements Increaser
         return false;
     }
     
-    private boolean candidateIsOkForRussianLanguage(User candidate)
+    private boolean candidateIsOkForRussianLanguage(Twitterian candidate)
     {
         if (candidate != null)
         {
-            String lang = candidate.getLang();
+            String lang = candidate.getLanguage();
             
             return lang != null && lang.equalsIgnoreCase("ru");
         }
@@ -408,28 +489,31 @@ public class IncreaserImpl implements Increaser
         if (exception != null)
         {
             if (exception.getErrorCode() == 88)
-                {
-                    try
-                    {                        
-                        int secondsUntilReset = exception.getRateLimitStatus().getSecondsUntilReset();
-                        Date nextRefreshDate = new Date(secondsUntilReset * 1000 + 1000l);
-                        
-                        System.out.println("Have to wait until " + nextRefreshDate.toString());
-                        
-                        Thread.sleep(nextRefreshDate.getTime());
-                        
-                        return true;
-                    }
-                    catch (InterruptedException interruptedException)
-                    {
-                        //TODO :: add logging
-                        interruptedException.printStackTrace();
-                        
-                        return true;
-                    }
+            {
+                try
+                {                        
+                    int secondsUntilReset = exception.getRateLimitStatus().getSecondsUntilReset();
+                    Date nextRefreshDate = new Date();
+                    nextRefreshDate.setTime(nextRefreshDate.getTime() + secondsUntilReset * 1000 + 1000l);
+                    System.out.println("Have to wait until " + nextRefreshDate.toString());
+
+                    Thread.sleep(nextRefreshDate.getTime());
+
+                    return true;
                 }
+                catch (InterruptedException interruptedException)
+                {
+                    //TODO :: add logging
+                    interruptedException.printStackTrace();
+
+                    return true;
+                }
+            }
+            else
+            {
                 //TODO :: add logging
                 exception.printStackTrace();
+            }
         }
         
         return false;
@@ -457,4 +541,81 @@ public class IncreaserImpl implements Increaser
             }
         }
     }
+
+    /**
+     * 
+     * @param candidateId
+     * @return succeded
+     */
+    private boolean addRandomTweetToFavourites(long candidateId)
+    {        
+        try
+        {
+            ResponseList<Status> statuses = informator.getUserTimeline(candidateId);
+            if (statuses != null)
+            {
+                int statusIndexToAdd = (int) (Math.random() * statuses.size());
+                Status status = statuses.get(statusIndexToAdd);
+                if (status != null)
+                {
+                    informator.createFavorite(status.getId());
+                    
+                    return true;
+                }                
+            }
+        }
+        catch (TwitterException te)           
+        {
+            boolean haveToWait = checkTwitterException(te);
+            if (haveToWait)
+            {
+                return addRandomTweetToFavourites(candidateId);
+            }
+        }
+        
+        return false;
+    }
+
+    private boolean unfollow(Long id)
+    {
+        try
+        {                    
+            informator.destroyFriendship(id);
+            return true;
+        }
+        catch (TwitterException exception)
+        {
+            boolean haveToWait = checkTwitterException(exception);
+            if (haveToWait)
+            {
+                return unfollow(id);
+            }            
+        }
+        
+        return false;
+    }
+
+    private List<Long> getFriendsIdsFirstPage(Long friendToInspect)
+    {
+        if (friendToInspect != null)
+        {
+            try
+            {
+                IDs ids = informator.getFriendsIDs(friendToInspect, -1);
+                
+                return ids != null ? ConvertionUtils.longArrayToList(ids.getIDs()) : null;
+            }
+            catch (TwitterException te)
+            {
+                boolean haveToWait = checkTwitterException(te);
+                if (haveToWait)
+                {
+                    return getFriendsIdsFirstPage(friendToInspect);
+                }  
+            }
+        }
+        
+        return null;
+    }        
+
 }

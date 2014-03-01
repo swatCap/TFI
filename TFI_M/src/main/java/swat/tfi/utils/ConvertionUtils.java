@@ -25,6 +25,23 @@ import twitter4j.IDs;
 public class ConvertionUtils
 {
 
+    public static List<Long> longArrayToList(long[] array)
+    {
+        if (array != null && array.length != 0)
+        {
+            List<Long> res = new ArrayList<Long>();
+            
+            for (long l : array)
+            {
+                res.add(l);
+            }
+            
+            return res;
+        }
+        
+        return null;
+    }
+    
     public static Long[] listToLongArray(List<Long> list)
     {
         if (list != null)
