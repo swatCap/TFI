@@ -5,6 +5,7 @@ import java.util.List;
 
 import swat.tfi.Increaser;
 import swat.tfi.data.Twitterian;
+import swat.tfi.exceptions.TFIException;
 import swat.tfi.impl.IncreaserImpl;
 import swat.tfi.utils.TwitteriansReadUtils;
 
@@ -17,8 +18,15 @@ public class App
     public static void main( String[] args )
     {
         Increaser increaser = new IncreaserImpl();
-        
-        increaser.unfollowAllWhoDoesntFollowMeExceptFavourites();
+        try
+        {
+            increaser.follow(15, true, true, false);
+        }
+        catch (TFIException exception)
+        {
+            exception.printStackTrace();
+        }
+//        increaser.unfollowAllWhoDoesntFollowMeExceptFavourites();
         
 //        List<Twitterian> favourites = increaser.getFavouriteFriends();
 //        

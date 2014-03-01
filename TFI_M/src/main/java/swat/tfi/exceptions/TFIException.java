@@ -5,8 +5,6 @@
 
 package swat.tfi.exceptions;
 
-import twitter4j.TwitterException;
-import twitter4j.internal.http.HttpResponse;
 
 /**
  * <b>Предназначение:</b><br/>
@@ -20,7 +18,7 @@ import twitter4j.internal.http.HttpResponse;
  * @author Sviatoslav Lobach (s.lobach@parkcode.com.ua)
  */
 
-public class TFIException extends TwitterException
+public class TFIException extends Exception
 {
 
     public TFIException(String message, Throwable cause)
@@ -36,18 +34,7 @@ public class TFIException extends TwitterException
     public TFIException(Exception cause)
     {
         super(cause);
-    }
-
-    public TFIException(String message, HttpResponse res)
-    {
-        super(message, res);
-    }
-
-    public TFIException(String message, Exception cause, int statusCode)
-    {
-        super(message, cause, statusCode);
-    }
-
+    }      
     
 
 }

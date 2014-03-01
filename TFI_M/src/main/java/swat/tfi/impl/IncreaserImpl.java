@@ -6,10 +6,8 @@
 package swat.tfi.impl;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
+import java.util.Date;
 import java.util.List;
-import java.util.Set;
 import swat.tfi.Increaser;
 import swat.tfi.Storage;
 import swat.tfi.data.Twitterian;
@@ -36,6 +34,9 @@ import twitter4j.conf.ConfigurationBuilder;
 
 public class IncreaserImpl implements Increaser
 {
+    private static final String MY_SCREEN_NAME = "mesviatsviat";
+    private final Long myId;
+    
     private final Twitter informator;
     private final Storage storage = new StorageH2Impl();
     
@@ -50,6 +51,10 @@ public class IncreaserImpl implements Increaser
         
         TwitterFactory tf = new TwitterFactory(cb.build());
         informator = tf.getInstance();  
+        
+        Twitterian me = getTwitterian(MY_SCREEN_NAME);        
+        
+        myId = me != null ? me.getId() : null;
     }
 
     @Override
@@ -61,7 +66,11 @@ public class IncreaserImpl implements Increaser
         }
         catch (TwitterException twitterException)
         {
-            twitterException.printStackTrace();      
+            boolean haveToWait = checkTwitterException(twitterException);
+            if (haveToWait)
+            {
+                return getMyFollowersIDs();
+            }
             return null;
         }          
     }
@@ -75,7 +84,11 @@ public class IncreaserImpl implements Increaser
         }
         catch (TwitterException twitterException)
         {
-            twitterException.printStackTrace();      
+            boolean haveToWait = checkTwitterException(twitterException);
+            if (haveToWait)
+            {
+                return getMyFriendsIDs();
+            }
             return null;
         }        
     }    
@@ -111,8 +124,11 @@ public class IncreaserImpl implements Increaser
         }
         catch (TwitterException te)
         {
-            //TODO :: add logging
-            te.printStackTrace();
+            boolean haveToWait = checkTwitterException(te);
+            if (haveToWait)
+            {
+                return getTwitterian(id);
+            }
             return null;
         }
     }
@@ -133,8 +149,11 @@ public class IncreaserImpl implements Increaser
         }
         catch (TwitterException te)
         {
-            //TODO :: add logging
-            te.printStackTrace();
+            boolean haveToWait = checkTwitterException(te);
+            if (haveToWait)
+            {
+                return getTwitterian(screenName);
+            }
             return null;
         }
     }        
@@ -151,25 +170,16 @@ public class IncreaserImpl implements Increaser
                 storage.addToFavouriteFriends(twitterian);
             }
             else if (screenName != null)
-            {
-                try
-                {
-                    User user = informator.showUser(screenName);
-                    if (user != null)
-                    {
-                        twitterian.setId(user.getId());
-                        twitterian.setName(user.getName());
-                        storage.addToFavouriteFriends(twitterian);                                
-                    }
-                    else
-                    {
-                        throw new TFIException("Attempt to add to favourites invalid user");
-                    }
+            {                
+                Twitterian user = getTwitterian(screenName);
+                if (user != null)
+                {                        
+                    storage.addToFavouriteFriends(user);                                
                 }
-                catch (TwitterException te)
+                else
                 {
-                    throw new TFIException("Error getting user with screen name " + screenName, te);
-                }
+                    throw new TFIException("Attempt to add to favourites invalid user");
+                }                
             }
             else 
             {
@@ -212,28 +222,29 @@ public class IncreaserImpl implements Increaser
         }
         
         return null;
-    }
+    }        
        
     @Override
     public void follow(int count, boolean friendsMoreThanFollowers, boolean russianLanguage, boolean noCollectiveFollowingTweets) throws TFIException
     {        
         int currentFollowed = 0;
-
+        List<Long> myFriends = getMyFriendsIDs();
+        
         while (currentFollowed < count)
         {
-            Long candidateId = findCandidateToFollow(friendsMoreThanFollowers, russianLanguage, noCollectiveFollowingTweets);
+            Long candidateId = findCandidateToFollow(myFriends, myId, friendsMoreThanFollowers, russianLanguage, noCollectiveFollowingTweets);
 
             if (candidateId != null)
             {
                 try
                 {
-                    informator.createFriendship(candidateId);
+                    follow(candidateId);
                     currentFollowed++;
+                    System.out.println("Followed number " + currentFollowed + " id: " + candidateId);
                 }
-                catch (TwitterException exception)
+                catch (TFIException exception)
                 {
-                    //TODO :: add logging
-                    exception.printStackTrace();                                                
+                    System.err.println(exception.getMessage());
                 }
             }
         }        
@@ -314,15 +325,13 @@ public class IncreaserImpl implements Increaser
         return null;
     }
 
-    private Long findCandidateToFollow(boolean friendsMoreThanFollowers, boolean russianLanguage, boolean noCollectiveFollowingTweets) throws TFIException
-    {
-        List<Long> friends = getMyFriendsIDs();
-        
-        if (friends != null && !friends.isEmpty())
+    private Long findCandidateToFollow(List<Long> myFriends, Long myId, boolean friendsMoreThanFollowers, boolean russianLanguage, boolean noCollectiveFollowingTweets) throws TFIException
+    {        
+        if (myFriends != null && !myFriends.isEmpty())
         {
-            int indexOfFriend = (int) (Math.random() * friends.size());
+            int indexOfFriend = (int) (Math.random() * myFriends.size());
             
-            Long friendToInspect = friends.get(indexOfFriend);
+            Long friendToInspect = myFriends.get(indexOfFriend);
             
             try
             {
@@ -334,20 +343,25 @@ public class IncreaserImpl implements Increaser
                     for (long candidateId : friendFriends)
                     {
                         User candidate = informator.showUser(candidateId);
-                        if (candidate != null)
-                        {
-                            
+                        if (candidate != null && (myId == null || candidateId != myId.longValue()))
+                        {                                                        
+                            if (friendsMoreThanFollowers && !candidateIsOkForFriendsMoreThanFollowers(candidate))
+                            {
+                                continue;
+                            }
+                            if (russianLanguage && !candidateIsOkForRussianLanguage(candidate))
+                            {
+                                continue;
+                            }
+                            //TODO :: collective followers check
+                            return candidateId;
                         }                        
                     }
                 }                
             }
             catch (TwitterException exception)
             {
-                //TODO :: add logging
-                exception.printStackTrace();
-                
-                //repeat attempt
-                return findCandidateToFollow(friendsMoreThanFollowers, russianLanguage, noCollectiveFollowingTweets);
+                checkTwitterException(exception);
             }            
         }
         else
@@ -355,6 +369,92 @@ public class IncreaserImpl implements Increaser
             throw new TFIException("You dont have friends! Follow at least one!");        
         }   
         
-        return findCandidateToFollow(friendsMoreThanFollowers, russianLanguage, noCollectiveFollowingTweets);
+        //repeat attempt
+        return findCandidateToFollow(myFriends, myId, friendsMoreThanFollowers, russianLanguage, noCollectiveFollowingTweets);
+    }
+    
+    private boolean candidateIsOkForFriendsMoreThanFollowers(User candidate)
+    {
+        if (candidate != null)
+        {
+            int candidateFollowersCount = candidate.getFollowersCount();
+            int candidateFriendsCount = candidate.getFriendsCount();
+            
+            return candidateFriendsCount > candidateFollowersCount;
+        }
+        
+        return false;
+    }
+    
+    private boolean candidateIsOkForRussianLanguage(User candidate)
+    {
+        if (candidate != null)
+        {
+            String lang = candidate.getLang();
+            
+            return lang != null && lang.equalsIgnoreCase("ru");
+        }
+        
+        return false;
+    }
+    
+    /**
+     * 
+     * @param exception
+     * @return have to wait
+     */
+    private boolean checkTwitterException(TwitterException exception)
+    {
+        if (exception != null)
+        {
+            if (exception.getErrorCode() == 88)
+                {
+                    try
+                    {                        
+                        int secondsUntilReset = exception.getRateLimitStatus().getSecondsUntilReset();
+                        Date nextRefreshDate = new Date(secondsUntilReset * 1000 + 1000l);
+                        
+                        System.out.println("Have to wait until " + nextRefreshDate.toString());
+                        
+                        Thread.sleep(nextRefreshDate.getTime());
+                        
+                        return true;
+                    }
+                    catch (InterruptedException interruptedException)
+                    {
+                        //TODO :: add logging
+                        interruptedException.printStackTrace();
+                        
+                        return true;
+                    }
+                }
+                //TODO :: add logging
+                exception.printStackTrace();
+        }
+        
+        return false;
+    }
+    
+    private void follow(Long id) throws TFIException
+    {
+        if (id != null)
+        {
+            try
+            {
+                informator.createFriendship(id);
+            }
+            catch (TwitterException te)
+            {
+                boolean haveToWait = checkTwitterException(te);
+                if (haveToWait)
+                {
+                    follow(id);
+                }
+                else
+                {
+                    throw new TFIException("Failed to follow", te);
+                }
+            }
+        }
     }
 }
