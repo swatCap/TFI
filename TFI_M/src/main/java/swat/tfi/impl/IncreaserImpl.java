@@ -16,6 +16,7 @@ import swat.tfi.data.Twitterian;
 import swat.tfi.exceptions.TFIException;
 import swat.tfi.utils.ConvertionUtils;
 import twitter4j.IDs;
+import twitter4j.RateLimitStatus;
 import twitter4j.RateLimitStatusEvent;
 import twitter4j.RateLimitStatusListener;
 import twitter4j.ResponseList;
@@ -40,8 +41,9 @@ import twitter4j.conf.ConfigurationBuilder;
 
 public class IncreaserImpl implements Increaser
 {
-    private static final String MY_SCREEN_NAME = "mesviatsviat";
-    private static final int    MAX_CALLS_PER_FOUR_MINUTES = 10;
+    private static final String MY_SCREEN_NAME                      = "mesviatsviat";
+    private static final long CALL_SLEEP_TIME_MILLISECS             = 5000;
+    private static final long RATE_LIMIT_UPDATE_SLEEP_TIME_SECS     = 3610;
     
     private final Long myId;
     
@@ -57,53 +59,39 @@ public class IncreaserImpl implements Increaser
           .setOAuthConsumerKey("QTGVU3HCGqNRqTAGclBZ9g")
           .setOAuthConsumerSecret("88dCGDkuPBQZRGEwAhXGVqvUgZQT6NqY3wchEuVe9kg")
           .setOAuthAccessToken("1460447732-hneuIZUcbfNYBJkElzacS2vH1ljl69TzvHgudag")
-          .setOAuthAccessTokenSecret("wmEgPeQwhE1No4k1oBuKThSQu4jYrih0s3KbGodNjwQ5B");
+          .setOAuthAccessTokenSecret("wmEgPeQwhE1No4k1oBuKThSQu4jYrih0s3KbGodNjwQ5B")                                                                                                                                                                                                           .setUser(MY_SCREEN_NAME).setPassword("181192Swat")
+                ;
         
         TwitterFactory tf = new TwitterFactory(cb.build());
         informator = tf.getInstance();  
         informator.addRateLimitStatusListener(new RateLimitStatusListener()
         {
-            private void checkRateLimit(RateLimitStatusEvent event)
+            private void checkRateLimit(RateLimitStatus status)
             {
-                int remainCalls = event.getRateLimitStatus().getRemaining();
-                int secondsUntilReset = event.getRateLimitStatus().getSecondsUntilReset();
-                if (secondsUntilReset < 0)
+                if (status != null)
                 {
-                    secondsUntilReset = 0;
-                }
-                secondsUntilReset += 240; //additional 3 mins
-                
-//                System.out.println("Calls remain : " + remainCalls + " Seconds until reset " + secondsUntilReset);
-                if (remainCalls <= 1)
-                {                    
-                    Date nextRefreshDate = new Date();
-                    long waitTimeInMillis = secondsUntilReset * 1000l;
-                    nextRefreshDate.setTime(nextRefreshDate.getTime() + waitTimeInMillis);
-                    System.out.println("Have to wait until rate refreshes to time " + nextRefreshDate.toString());
+                    int remainCalls = status.getRemaining();
 
-                    try
-                    {
-                        Thread.sleep(waitTimeInMillis);
+                    if (remainCalls <= 1)
+                    { 
+                        waitUntilCallsUpdate(status);                    
                     }
-                    catch (InterruptedException exception)
-                    {
-                        exception.printStackTrace();
-                    }
-                    
                 }
             }
             
             public void onRateLimitStatus(RateLimitStatusEvent event)
             {
-                checkRateLimit(event);
+                checkRateLimit(event != null ? event.getRateLimitStatus() : null);
             }
 
             public void onRateLimitReached(RateLimitStatusEvent event)
             {
                 System.out.println("Rate limit reached!");
                 
-                checkRateLimit(event);                                
+                checkRateLimit(event != null ? event.getRateLimitStatus() : null);                                
             }
+
+            
         });
         Twitterian me = getTwitterian(MY_SCREEN_NAME);        
         
@@ -114,7 +102,9 @@ public class IncreaserImpl implements Increaser
 
     @Override
     public List<Long> getMyFollowersIDs()
-    {        
+    {      
+        sleepSafe(CALL_SLEEP_TIME_MILLISECS);
+        
         try
         {
             return ConvertionUtils.idsToList(informator.getFollowersIDs(-1));
@@ -132,7 +122,9 @@ public class IncreaserImpl implements Increaser
 
     @Override
     public List<Long> getMyFriendsIDs()
-    {        
+    {      
+        sleepSafe(CALL_SLEEP_TIME_MILLISECS);
+        
         try
         {
             return ConvertionUtils.idsToList(informator.getFriendsIDs(-1));
@@ -166,6 +158,8 @@ public class IncreaserImpl implements Increaser
     @Override
     public Twitterian getTwitterian(long id)
     {        
+        sleepSafe(CALL_SLEEP_TIME_MILLISECS);
+        
         try
         {            
             User u = informator.showUser(id);
@@ -195,6 +189,8 @@ public class IncreaserImpl implements Increaser
     @Override
     public Twitterian getTwitterian(String screenName)
     {        
+        sleepSafe(CALL_SLEEP_TIME_MILLISECS);
+        
         try
         {                           
             User u = informator.showUser(screenName);
@@ -221,6 +217,8 @@ public class IncreaserImpl implements Increaser
     @Override
     public List<Long> getFriendsIds(Long friendToInspect)
     {
+        sleepSafe(CALL_SLEEP_TIME_MILLISECS);
+        
         if (friendToInspect != null)
         {
             try
@@ -312,11 +310,10 @@ public class IncreaserImpl implements Increaser
     public void follow(int count, boolean friendsMoreThanFollowers, boolean russianLanguage, boolean noCollectiveFollowingTweets) throws TFIException
     {        
         int currentFollowed = 0;
-        List<Twitterian> myFavouriteFriends = getFavouriteFriends();
         
         while (currentFollowed < count)
         {
-            Long candidateId = findCandidateToFollow(myFavouriteFriends, myId, friendsMoreThanFollowers, russianLanguage, noCollectiveFollowingTweets);
+            Long candidateId = findCandidateToFollow(new ArrayList<Long>(myFriends), myId, friendsMoreThanFollowers, russianLanguage, noCollectiveFollowingTweets);
 
             if (candidateId != null)
             {
@@ -325,8 +322,7 @@ public class IncreaserImpl implements Increaser
                     follow(candidateId);
                     currentFollowed++;
                     System.out.println("Followed number " + currentFollowed + " id: " + candidateId);
-                    addRandomTweetToFavourites(candidateId);
-                    
+                    addRandomTweetToFavourites(candidateId);                    
                 }
                 catch (TFIException exception)
                 {
@@ -405,13 +401,13 @@ public class IncreaserImpl implements Increaser
         return null;
     }
 
-    private Long findCandidateToFollow(List<Twitterian> myFavouriteFriends, Long myId, boolean friendsMoreThanFollowers, boolean russianLanguage, boolean noCollectiveFollowingTweets) throws TFIException
+    private Long findCandidateToFollow(List<Long> myFriendsIds, Long myId, boolean friendsMoreThanFollowers, boolean russianLanguage, boolean noCollectiveFollowingTweets) throws TFIException
     {        
-        if (myFavouriteFriends != null && !myFavouriteFriends.isEmpty())
+        if (myFriendsIds != null && !myFriendsIds.isEmpty())
         {
-            int indexOfFriend = (int) (Math.random() * myFavouriteFriends.size());
+            int indexOfFriend = (int) (Math.random() * myFriendsIds.size());
             
-            Long friendToInspect = myFavouriteFriends.get(indexOfFriend).getId();
+            Long friendToInspect = myFriendsIds.get(indexOfFriend);
                                        
             List<Long> friendFriends = getFriendsIdsFirstPage(friendToInspect);
             if (friendFriends != null && !friendFriends.isEmpty())
@@ -451,7 +447,7 @@ public class IncreaserImpl implements Increaser
         }   
         
         //repeat attempt
-        return findCandidateToFollow(myFavouriteFriends, myId, friendsMoreThanFollowers, russianLanguage, noCollectiveFollowingTweets);
+        return findCandidateToFollow(myFriendsIds, myId, friendsMoreThanFollowers, russianLanguage, noCollectiveFollowingTweets);
     }
     
     private boolean candidateIsOkForFriendsMoreThanFollowers(Twitterian candidate)
@@ -488,26 +484,19 @@ public class IncreaserImpl implements Increaser
     {
         if (exception != null)
         {
-            if (exception.getErrorCode() == 88)
+            if (exception.getErrorCode() == 88) //rate limit reached
             {
-                try
-                {                        
-                    int secondsUntilReset = exception.getRateLimitStatus().getSecondsUntilReset();
-                    Date nextRefreshDate = new Date();
-                    nextRefreshDate.setTime(nextRefreshDate.getTime() + secondsUntilReset * 1000 + 1000l);
-                    System.out.println("Have to wait until " + nextRefreshDate.toString());
-
-                    Thread.sleep(nextRefreshDate.getTime());
-
-                    return true;
-                }
-                catch (InterruptedException interruptedException)
-                {
-                    //TODO :: add logging
-                    interruptedException.printStackTrace();
-
-                    return true;
-                }
+                waitUntilCallsUpdate(exception.getRateLimitStatus());
+                
+                return true;
+            }
+            else if (exception.getErrorCode() == -1)
+            {
+                System.err.println("Not authorized. Slleping " + RATE_LIMIT_UPDATE_SLEEP_TIME_SECS + " sec");
+                sleepSafe(RATE_LIMIT_UPDATE_SLEEP_TIME_SECS * 1000l);
+                //TODO :: add logging
+                
+                return true;
             }
             else
             {
@@ -521,6 +510,8 @@ public class IncreaserImpl implements Increaser
     
     private void follow(Long id) throws TFIException
     {
+        sleepSafe(CALL_SLEEP_TIME_MILLISECS);
+        
         if (id != null)
         {
             try
@@ -543,17 +534,21 @@ public class IncreaserImpl implements Increaser
     }
 
     /**
-     * 
+     * TODO :: split into two methods - get user timeline and add to favourites
      * @param candidateId
      * @return succeded
      */
     private boolean addRandomTweetToFavourites(long candidateId)
     {        
+        sleepSafe(CALL_SLEEP_TIME_MILLISECS);
+        
         try
         {
             ResponseList<Status> statuses = informator.getUserTimeline(candidateId);
             if (statuses != null)
             {
+                sleepSafe(CALL_SLEEP_TIME_MILLISECS);        
+                
                 int statusIndexToAdd = (int) (Math.random() * statuses.size());
                 Status status = statuses.get(statusIndexToAdd);
                 if (status != null)
@@ -578,6 +573,8 @@ public class IncreaserImpl implements Increaser
 
     private boolean unfollow(Long id)
     {
+        sleepSafe(CALL_SLEEP_TIME_MILLISECS);        
+        
         try
         {                    
             informator.destroyFriendship(id);
@@ -597,6 +594,8 @@ public class IncreaserImpl implements Increaser
 
     private List<Long> getFriendsIdsFirstPage(Long friendToInspect)
     {
+        sleepSafe(CALL_SLEEP_TIME_MILLISECS);
+        
         if (friendToInspect != null)
         {
             try
@@ -617,5 +616,46 @@ public class IncreaserImpl implements Increaser
         
         return null;
     }        
+    
+    private void waitUntilCallsUpdate(RateLimitStatus status)
+    {
+        if (status != null)
+        {
+            int secondsUntilReset = status.getSecondsUntilReset();
 
+            if (secondsUntilReset < 0)
+            {
+                secondsUntilReset = 0;
+            }
+            secondsUntilReset += RATE_LIMIT_UPDATE_SLEEP_TIME_SECS; //additional 30 mins
+
+            System.err.println("Calls remain : " + status.getRemaining() + " Seconds until reset " + secondsUntilReset);
+
+            Date nextRefreshDate = new Date();
+            long waitTimeInMillis = secondsUntilReset * 1000l;
+            nextRefreshDate.setTime(nextRefreshDate.getTime() + waitTimeInMillis);
+            System.out.println("Have to wait until rate refreshes to time " + nextRefreshDate.toString());
+
+            try
+            {
+                Thread.sleep(waitTimeInMillis);
+            }
+            catch (InterruptedException exception)
+            {
+                exception.printStackTrace();
+            }
+        }
+    }
+
+    private void sleepSafe(long ms) 
+    {
+        try
+        {
+            Thread.sleep(ms);
+        }
+        catch (InterruptedException  exception)
+        {
+            exception.printStackTrace();
+        }
+    }
 }

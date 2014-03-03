@@ -18,9 +18,13 @@ public class App
     public static void main( String[] args )
     {
         Increaser increaser = new IncreaserImpl();
+        
         try
         {
-            increaser.follow(50, true, false, false);
+            increaser.follow(50, true, true, false);
+            increaser.addToFavouriteFriends(new Twitterian("pusstwi"));
+            increaser.addToFavouriteFriends(new Twitterian("FrazaDnya"));
+            
         }
         catch (TFIException exception)
         {

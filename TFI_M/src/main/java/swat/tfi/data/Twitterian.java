@@ -31,6 +31,11 @@ public class Twitterian
     {
     }
 
+    public Twitterian(String screenName)
+    {
+        this.screenName = screenName;
+    }
+    
     public Long getId()
     {
         return id;
