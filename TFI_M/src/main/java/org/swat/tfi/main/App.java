@@ -3,9 +3,11 @@ package org.swat.tfi.main;
 import java.io.File;
 import java.util.List;
 
+import swat.tfi.IncreaseJob;
 import swat.tfi.Increaser;
 import swat.tfi.data.Twitterian;
 import swat.tfi.exceptions.TFIException;
+import swat.tfi.impl.IncreaseJobImpl;
 import swat.tfi.impl.IncreaserImpl;
 import swat.tfi.utils.TwitteriansReadUtils;
 
@@ -17,19 +19,19 @@ public class App
 {
     public static void main( String[] args )
     {
-        Increaser increaser = new IncreaserImpl();
+        IncreaseJob increaseJob = new IncreaseJobImpl(true);
         
-        try
-        {
-            increaser.follow(50, true, true, false);
-            increaser.addToFavouriteFriends(new Twitterian("pusstwi"));
-            increaser.addToFavouriteFriends(new Twitterian("FrazaDnya"));
+//        try
+//        {
+//            increaser.addToFavouriteFriends(new Twitterian("pusstwi"));
+//            increaser.addToFavouriteFriends(new Twitterian("FrazaDnya"));
+            increaseJob.follow(50, true, true, false);            
             
-        }
-        catch (TFIException exception)
-        {
-            exception.printStackTrace();
-        }
+//        }
+//        catch (TFIException exception)
+//        {
+//            exception.printStackTrace();
+//        }
 //        increaser.unfollowAllWhoDoesntFollowMeExceptFavourites();
         
 //        List<Twitterian> favourites = increaser.getFavouriteFriends();

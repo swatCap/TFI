@@ -11,10 +11,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import swat.tfi.Increaser;
+import swat.tfi.Reinitor;
 import swat.tfi.Storage;
 import swat.tfi.data.Twitterian;
 import swat.tfi.exceptions.TFIException;
 import swat.tfi.utils.ConvertionUtils;
+import swat.tfi.utils.DateTimeUtils;
 import twitter4j.IDs;
 import twitter4j.RateLimitStatus;
 import twitter4j.RateLimitStatusEvent;
@@ -43,19 +45,55 @@ public class IncreaserImpl implements Increaser
 {
     private static final String MY_SCREEN_NAME                      = "mesviatsviat";
     private static final long CALL_SLEEP_TIME_MILLISECS             = 5000;
-    private static final long RATE_LIMIT_UPDATE_SLEEP_TIME_SECS     = 3610;
+    private static final long RATE_LIMIT_UPDATE_SLEEP_TIME_SECS     = 1000;
     
     private final Long myId;
     
-    private final Twitter informator;
+    private Twitter informator;
     private final Storage storage = new StorageH2Impl();
     
     private final Set<Long> myFriends;
-            
+                
+    private final boolean debugEnabled;
+    
+    private Reinitor reinitor;
+    
+    private int followed = 0;
+    
+    private boolean isUnfollowing = false;
+        
+    public IncreaserImpl(Reinitor r, boolean debugEnabled)
+    {                
+        this.reinitor = r;
+        this.debugEnabled = debugEnabled;
+        
+        reinit();
+        
+        Twitterian me = getTwitterian(MY_SCREEN_NAME);        
+        
+        myId = me != null ? me.getId() : null;                
+        
+        myFriends = new HashSet<Long>(getMyFriendsIDs());        
+    }
+    
+    public IncreaserImpl(Reinitor r)
+    {
+        this(r, false);
+    }
+    
     public IncreaserImpl()
-    {        
-        ConfigurationBuilder cb = new ConfigurationBuilder();
-        cb.setDebugEnabled(true)
+    {
+        this(null, false);
+    }
+    
+    private void reinit()
+    {
+        if (debugEnabled)
+        {
+            System.out.println("Reinitting");
+        }
+        
+        ConfigurationBuilder cb = new ConfigurationBuilder().setDebugEnabled(false)
           .setOAuthConsumerKey("QTGVU3HCGqNRqTAGclBZ9g")
           .setOAuthConsumerSecret("88dCGDkuPBQZRGEwAhXGVqvUgZQT6NqY3wchEuVe9kg")
           .setOAuthAccessToken("1460447732-hneuIZUcbfNYBJkElzacS2vH1ljl69TzvHgudag")
@@ -93,16 +131,16 @@ public class IncreaserImpl implements Increaser
 
             
         });
-        Twitterian me = getTwitterian(MY_SCREEN_NAME);        
-        
-        myId = me != null ? me.getId() : null;                
-        
-        myFriends = new HashSet<Long>(getMyFriendsIDs());        
     }
 
     @Override
     public List<Long> getMyFollowersIDs()
     {      
+        if (debugEnabled)
+        {
+            System.out.println("getMyFollowersIDs");
+        }
+        
         sleepSafe(CALL_SLEEP_TIME_MILLISECS);
         
         try
@@ -123,6 +161,11 @@ public class IncreaserImpl implements Increaser
     @Override
     public List<Long> getMyFriendsIDs()
     {      
+        if (debugEnabled)
+        {
+            System.out.println("getMyFriendsIDs");
+        }
+        
         sleepSafe(CALL_SLEEP_TIME_MILLISECS);
         
         try
@@ -143,6 +186,11 @@ public class IncreaserImpl implements Increaser
     @Override
     public void unfollowAllWhoDoesntFollowMeExceptFavourites()
     {
+        if (debugEnabled)
+        {
+            System.out.println("unfollowAllWhoDoesntFollowMeExceptFavourites");
+        }
+        
         List<Long> usersToUnfollow = findIdsOfAllWhoDoesntFollowMeExceptFavourites();
         List<Long> unsucceeded = unfollow(usersToUnfollow);
                 
@@ -152,12 +200,22 @@ public class IncreaserImpl implements Increaser
     @Override
     public List<Twitterian> getFavouriteFriends()
     {
+        if (debugEnabled)
+        {
+            System.out.println("getFavouriteFriends");
+        }
+        
         return storage.getFavouriteFriends();
     }
 
     @Override
     public Twitterian getTwitterian(long id)
     {        
+        if (debugEnabled)
+        {
+            System.out.println("getTwitterian by id " + id);
+        }
+        
         sleepSafe(CALL_SLEEP_TIME_MILLISECS);
         
         try
@@ -189,6 +247,11 @@ public class IncreaserImpl implements Increaser
     @Override
     public Twitterian getTwitterian(String screenName)
     {        
+        if (debugEnabled)
+        {
+            System.out.println("getTwitterian by screen name " + screenName);
+        }
+        
         sleepSafe(CALL_SLEEP_TIME_MILLISECS);
         
         try
@@ -217,6 +280,11 @@ public class IncreaserImpl implements Increaser
     @Override
     public List<Long> getFriendsIds(Long friendToInspect)
     {
+        if (debugEnabled)
+        {
+            System.out.println("getFriendsIds " + friendToInspect);
+        }
+        
         sleepSafe(CALL_SLEEP_TIME_MILLISECS);
         
         if (friendToInspect != null)
@@ -242,9 +310,14 @@ public class IncreaserImpl implements Increaser
 
     @Override
     public void addToFavouriteFriends(Twitterian twitterian) throws TFIException
-    {
+    {                
         if (twitterian != null)
         {
+            if (debugEnabled)
+            {
+                System.out.println("addToFavouriteFriends " + twitterian.getScreenName());
+            }
+            
             Long id = twitterian.getId();
             String screenName = twitterian.getScreenName();
             if (id != null)
@@ -273,6 +346,11 @@ public class IncreaserImpl implements Increaser
     @Override
     public List<Twitterian> addToFavouriteFriends(List<Twitterian> twitterians)
     {
+        if (debugEnabled)
+        {
+            System.out.println("addToFavouriteFriends list ");
+        }
+        
         if (twitterians != null && !twitterians.isEmpty())
         {
             List<Twitterian> notAdded = null;
@@ -309,27 +387,34 @@ public class IncreaserImpl implements Increaser
     @Override
     public void follow(int count, boolean friendsMoreThanFollowers, boolean russianLanguage, boolean noCollectiveFollowingTweets) throws TFIException
     {        
-        int currentFollowed = 0;
-        
-        while (currentFollowed < count)
+        if (debugEnabled)
         {
-            Long candidateId = findCandidateToFollow(new ArrayList<Long>(myFriends), myId, friendsMoreThanFollowers, russianLanguage, noCollectiveFollowingTweets);
-
-            if (candidateId != null)
+            System.out.println("follow " + count);
+        }
+        
+        followed = 0;
+        isUnfollowing = false;
+                
+        while (followed < count)
+        {
+            Twitterian candidate = findCandidateToFollow(new ArrayList<Long>(myFriends), myId, friendsMoreThanFollowers, russianLanguage, noCollectiveFollowingTweets);
+            Long candidateId = candidate != null ? candidate.getId() : null;
+            
+            if (candidate != null)
             {
                 try
-                {
+                {              
+                    addRandomTweetToFavourites(candidateId);
                     follow(candidateId);
-                    currentFollowed++;
-                    System.out.println("Followed number " + currentFollowed + " id: " + candidateId);
-                    addRandomTweetToFavourites(candidateId);                    
+                    followed++;
+                    System.out.println("Followed number " + followed + ", " + candidate.getName() + " " + candidate.getScreenName());                                        
                 }
                 catch (TFIException exception)
                 {
                     System.err.println(exception.getMessage());
                 }
             }
-        }        
+        }              
     }
 
     @Override
@@ -377,6 +462,8 @@ public class IncreaserImpl implements Increaser
      */
     private List<Long> unfollow(List<Long> idsToUnfollow)
     {
+        
+        
         if (idsToUnfollow != null && !idsToUnfollow.isEmpty())
         {
             List<Long> res = null;
@@ -401,7 +488,7 @@ public class IncreaserImpl implements Increaser
         return null;
     }
 
-    private Long findCandidateToFollow(List<Long> myFriendsIds, Long myId, boolean friendsMoreThanFollowers, boolean russianLanguage, boolean noCollectiveFollowingTweets) throws TFIException
+    private Twitterian findCandidateToFollow(List<Long> myFriendsIds, Long myId, boolean friendsMoreThanFollowers, boolean russianLanguage, boolean noCollectiveFollowingTweets) throws TFIException
     {        
         if (myFriendsIds != null && !myFriendsIds.isEmpty())
         {
@@ -430,12 +517,15 @@ public class IncreaserImpl implements Increaser
                                     continue;
                                 }
                                 //TODO :: collective followers check
-                                return candidateId;
+                                return candidate;
                             }  
                         }
                         else
                         {
-                            return candidateId;
+                            Twitterian candidate = new Twitterian();
+                            candidate.setId(candidateId);
+                            
+                            return candidate;
                         }
                     }
                 }
@@ -492,8 +582,19 @@ public class IncreaserImpl implements Increaser
             }
             else if (exception.getErrorCode() == -1)
             {
-                System.err.println("Not authorized. Slleping " + RATE_LIMIT_UPDATE_SLEEP_TIME_SECS + " sec");
+                System.err.println(DateTimeUtils.dateToString(new Date()) + " Not authorized. Sleeping " + RATE_LIMIT_UPDATE_SLEEP_TIME_SECS + " sec");
                 sleepSafe(RATE_LIMIT_UPDATE_SLEEP_TIME_SECS * 1000l);
+                if (reinitor != null)
+                {
+                    if (!isUnfollowing)
+                    {
+                        reinitor.reinitForFollow(followed);
+                    }
+                    else
+                    {
+                        reinitor.reinitForUnfollow();
+                    }
+                }
                 //TODO :: add logging
                 
                 return true;
@@ -510,6 +611,11 @@ public class IncreaserImpl implements Increaser
     
     private void follow(Long id) throws TFIException
     {
+        if (debugEnabled)
+        {
+            System.out.println("follow id:" + id);
+        }
+        
         sleepSafe(CALL_SLEEP_TIME_MILLISECS);
         
         if (id != null)
@@ -540,6 +646,11 @@ public class IncreaserImpl implements Increaser
      */
     private boolean addRandomTweetToFavourites(long candidateId)
     {        
+        if (debugEnabled)
+        {
+            System.out.println("addRandomTweetToFavourites id:" + candidateId);
+        }
+        
         sleepSafe(CALL_SLEEP_TIME_MILLISECS);
         
         try
@@ -573,11 +684,19 @@ public class IncreaserImpl implements Increaser
 
     private boolean unfollow(Long id)
     {
+        isUnfollowing = true;
+        
+        if (debugEnabled)
+        {
+            System.out.println("unfollow id:" + id);
+        }
+        
         sleepSafe(CALL_SLEEP_TIME_MILLISECS);        
         
         try
         {                    
             informator.destroyFriendship(id);
+            isUnfollowing = false;
             return true;
         }
         catch (TwitterException exception)
@@ -589,11 +708,17 @@ public class IncreaserImpl implements Increaser
             }            
         }
         
+        isUnfollowing = false;
         return false;
     }
 
     private List<Long> getFriendsIdsFirstPage(Long friendToInspect)
     {
+        if (debugEnabled)
+        {
+            System.out.println("getFriendsIdsFirstPage id:" + friendToInspect);
+        }
+        
         sleepSafe(CALL_SLEEP_TIME_MILLISECS);
         
         if (friendToInspect != null)
@@ -619,6 +744,11 @@ public class IncreaserImpl implements Increaser
     
     private void waitUntilCallsUpdate(RateLimitStatus status)
     {
+        if (debugEnabled)
+        {
+            System.out.println("waitUntilCallsUpdate");
+        }
+        
         if (status != null)
         {
             int secondsUntilReset = status.getSecondsUntilReset();
@@ -627,23 +757,25 @@ public class IncreaserImpl implements Increaser
             {
                 secondsUntilReset = 0;
             }
-            secondsUntilReset += RATE_LIMIT_UPDATE_SLEEP_TIME_SECS; //additional 30 mins
+            secondsUntilReset += RATE_LIMIT_UPDATE_SLEEP_TIME_SECS;
 
             System.err.println("Calls remain : " + status.getRemaining() + " Seconds until reset " + secondsUntilReset);
 
             Date nextRefreshDate = new Date();
             long waitTimeInMillis = secondsUntilReset * 1000l;
             nextRefreshDate.setTime(nextRefreshDate.getTime() + waitTimeInMillis);
-            System.out.println("Have to wait until rate refreshes to time " + nextRefreshDate.toString());
+            System.out.println(DateTimeUtils.dateToString(new Date()) + " Have to wait until rate refreshes to time " + nextRefreshDate.toString());
 
-            try
+            sleepSafe(waitTimeInMillis);
+            
+            if (!isUnfollowing)
             {
-                Thread.sleep(waitTimeInMillis);
+                reinitor.reinitForFollow(followed);
             }
-            catch (InterruptedException exception)
+            else
             {
-                exception.printStackTrace();
-            }
+                reinitor.reinitForUnfollow();
+            }      
         }
     }
 
