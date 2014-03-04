@@ -404,7 +404,7 @@ public class IncreaserImpl implements Increaser
             {
                 try
                 {              
-                    addRandomTweetToFavourites(candidateId);
+//                    addRandomTweetToFavourites(candidateId);
                     follow(candidateId);
                     followed++;
                     System.out.println("Followed number " + followed + ", " + candidate.getName() + " " + candidate.getScreenName());                                        
@@ -414,6 +414,7 @@ public class IncreaserImpl implements Increaser
                     System.err.println(exception.getMessage());
                 }
             }
+            
         }              
     }
 
@@ -461,9 +462,7 @@ public class IncreaserImpl implements Increaser
      * @return ids which were not unfollowed
      */
     private List<Long> unfollow(List<Long> idsToUnfollow)
-    {
-        
-        
+    {                
         if (idsToUnfollow != null && !idsToUnfollow.isEmpty())
         {
             List<Long> res = null;

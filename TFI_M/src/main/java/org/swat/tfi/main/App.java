@@ -25,7 +25,7 @@ public class App
 //        {
 //            increaser.addToFavouriteFriends(new Twitterian("pusstwi"));
 //            increaser.addToFavouriteFriends(new Twitterian("FrazaDnya"));
-            increaseJob.follow(50, true, true, false);            
+            increaseJob.follow(500, true, true, false);            
             
 //        }
 //        catch (TFIException exception)
